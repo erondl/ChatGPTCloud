@@ -6,7 +6,5 @@ if not exist ".venv\Scripts\python.exe" (
   pause
   exit /b 1
 )
-".venv\Scripts\python.exe" -m haunted_tv.config.setup
-set "result=%errorlevel%"
-if not "%result%"=="0" pause
-exit /b %result%
+call scripts\start.bat
+exit /b %errorlevel%

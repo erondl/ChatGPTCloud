@@ -24,8 +24,8 @@ if errorlevel 1 goto :failed
 if errorlevel 1 goto :failed
 ".venv\Scripts\python.exe" -m pip install --only-binary=:all: -r requirements.txt
 if errorlevel 1 goto :failed
-echo Dependencies installed. Configure the local camera and operator PIN next.
-call scripts\configure.bat
+echo Dependencies installed. Opening the camera connection window.
+call scripts\start.bat
 exit /b %errorlevel%
 :failed
 echo Installation failed. Review the message above; TLS verification must stay enabled.

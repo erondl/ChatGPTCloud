@@ -1,19 +1,92 @@
-# Phase A test report — 2026-10-28
+# Phase A test report — 0.2.0 — 2026-10-28
 
-## Scope and release status
+## Scope and operator feedback
 
-Haunted TV 0.1.0 implements **Phase A only**. The supplied specification explicitly
-requires target-PC acceptance before Phase B starts. That gate is **pending**.
-The operator reports that the camera already works with their existing local
-Python player. This is useful source evidence, not acceptance of this new kiosk.
+Version 0.2.0 follows the operator's updated workflow: start in a normal editable
+connection window, connect explicitly, enter full screen optionally, and leave
+or close normally without a PIN or always-on-top restriction. Those instructions
+replace the corresponding locked-kiosk rules in the original master prompt.
+CRT, bezels and face effects remain later phases.
 
-## Executed in this cloud environment
+The operator reports that their camera works with an existing Python player.
+They also reported that the previous Haunted TV build showed colour bars and
+was difficult to exit, leading to a PC shutdown. That is a reported target-PC
+failure of the previous interaction, not a passing acceptance result. The revised
+0.2.0 workflow must be checked on the actual Windows PC.
 
-Linux x86-64, CPython 3.12.14, PySide6/Qt 6.9.1 (offscreen platform),
-PyAV 16.0.1, NumPy 2.2.6. Developer integration uses system FFmpeg 7.1.5
-with libx264 and MediaMTX 1.12.3 on loopback. No real camera credentials were used.
+## Current 0.2.0 verification
 
-Run from `/workspace/ChatGPTCloud`:
+**110 passed, 0 failed, 0 skipped in 29.40 seconds** with both network-test
+variables enabled. This is runner time, not a video performance measurement.
+Validation ran on Linux x86-64, CPython 3.12.14, Qt/PySide6 6.9.1 offscreen,
+PyAV 16.0.1 and NumPy 2.2.6. `pip check` and Python byte-compilation also passed.
+No Windows 11 or real camera success is claimed.
+
+Current executed checks:
+
+| Check | Passing evidence and limits |
+|---|---|
+| Normal startup | Visible connection fields; no PIN gate, fullscreen, always-on-top flag or automatic connection |
+| Credentialed URL import | Password extracted into masked field; saved URL contains no password; special characters decoded once |
+| Connect/Disconnect | Current settings/session credentials reach capture; disconnect hides old frames and retires capture in the background |
+| Connection errors | Safe reason shown; fields stay editable; corrected connection can be requested |
+| Optional password storage | Session-only login works without the vault; vault failure warns but does not block a supplied password |
+| Fullscreen controls | Button/F11 enters video-only view; Esc returns to connection controls |
+| Ordinary exit | Close and shortcut paths require no PIN, including during connection or errors |
+| Stream switching | Retire old worker before starting latest request; no stale image or unbounded workers |
+| Real RTSP | Local MediaMTX/FFmpeg decode, publisher loss/recovery and media-to-widget rendering |
+| Privacy | No credentialed URL/password written to TOML or logs; no production frames saved |
+
+The real MediaMTX/FFmpeg GUI test clicked Connect in the new form, displayed
+actual decoded H.264 video, entered fullscreen, stopped the publisher and verified
+automatic return to editable controls, restarted the publisher and verified live
+recovery, then disconnected and closed the session. All owned capture threads
+finished within the test deadline. The fixture uses generated video on loopback,
+not the operator's NVR or physical network cable.
+
+Regression tests also cover explicit empty pasted passwords, masking credentials
+even with a malformed port, optional-vault failure without blocking a supplied
+password, safe stream replacement and startup/exit without a configured PIN.
+
+Offscreen Qt tests verify program behavior and flags. Physical Alt+Tab, Alt+F4,
+monitor selection, visible rendering and Windows Credential Manager need target-PC
+verification even if automated checks pass.
+
+## Historical 0.1.0 cloud evidence
+
+The prior release report recorded **76 passed, 0 failed, 0 skipped in 22.88
+seconds** for 0.1.0. This is historical runner time, not video performance, and
+does not establish 0.2.0 readiness. Its kiosk/PIN assertions describe behavior
+deliberately removed in 0.2.0.
+
+That run used Linux x86-64, CPython 3.12.14, PySide6/Qt 6.9.1 offscreen,
+PyAV 16.0.1 and NumPy 2.2.6. Integration used system FFmpeg 7.1.5 with libx264
+and MediaMTX 1.12.3 on loopback. No real camera credentials were used.
+`pip check`, CLI entry-point checks and Python byte-compilation were also
+reported as passed for 0.1.0.
+
+Historical evidence included:
+
+- Real generated H.264 RTSP video decoded into advancing nonuniform RGB frames,
+  publisher-stop recovery, bounded capture shutdown and offscreen rendering.
+- A local probe and capture-throughput run. Authenticated SDP/SETUP/media were
+  inferred together from decoded video, not independently timed.
+- Actual PyAV Basic-auth handshakes checking exact special-character password
+  bytes and the rejected-login retry limit. The test receiver returned an error
+  after checking credentials; it did not establish a successful camera login.
+- Config validation, PIN hashing, mocked vault failures, log redaction/rotation,
+  frozen static and mocked Windows sleep API calls.
+
+The MediaMTX archive was verified against its official SHA-256 file:
+`450d1172bf6708cbd630eada115ccfc33453227e16750369113d1dfe34f876d8`
+for `mediamtx_v1.12.3_linux_amd64.tar.gz`. No MediaMTX executable is included
+in the source archive. Its Basic-auth parser rejected a colon within the decoded
+password; a separate protocol receiver covered that case without claiming
+MediaMTX/camera compatibility.
+
+## Reproducing automated checks
+
+Run from the checkout on Linux with permission to use loopback sockets:
 
 ```sh
 QT_QPA_PLATFORM=offscreen \
@@ -22,73 +95,39 @@ HAUNTED_TV_MEDIAMTX=/workspace/haunted-tv-tools/mediamtx \
 .venv/bin/python -m pytest -q
 ```
 
-**Final result: 76 passed, 0 failed, 0 skipped in 22.88 seconds.** This is test
-execution time, not a video performance measurement. `pip check`, CLI entry-point
-smokes and Python byte-compilation also passed.
+Use a locally installed, checksum-verified MediaMTX binary. Without MediaMTX,
+FFmpeg and the opt-in variables, real network/media tests are skipped. Record
+passed, failed and skipped counts separately. A default run with skipped media
+tests is not real RTSP validation. See the README for Windows/manual-source steps.
 
-The optional tests require permission to bind/connect loopback sockets. Without
-those two environment variables the five real network/media tests are skipped;
-a default run alone must not be described as real RTSP validation.
+## Target-PC acceptance — not yet verified for 0.2.0
 
-| Capability | Evidence and limits |
+| Case | Current status |
 |---|---|
-| Pinned dependencies | Installed from binary wheels; `pip check` passed on this Linux/Python version. No verification was disabled. Windows installation remains unexecuted. |
-| Real RTSP decode | MediaMTX + FFmpeg generated 640×360 H.264 video; PyAV yielded nonuniform uint8 RGB frames with advancing sequence numbers. |
-| Loss and recovery | Stopped the local publisher, observed non-live state, restarted it, observed newer live frames, and verified bounded worker shutdown. This is not a physical cable-unplug test. |
-| Full media-to-render path | Decoded the actual RTSP test pattern into the Qt widget and checked the in-memory rendered image. Offscreen only; no camera images saved. |
-| Connection probe | Real DNS/TCP/OPTIONS/DESCRIBE/SDP and decoded-video checks passed against local RTSP. Authenticated SDP/SETUP/RTP are inferred together from media, not independently timed. |
-| Benchmark tool | Executed against the local stream, producing a real capture-throughput report. No reference-PC performance claim follows. |
-| Special-character passwords | URL roundtrip tests plus actual FFmpeg Basic-auth request confirmed exact `@ # % :` password bytes, encoded once. The test receiver deliberately returns 404 after validating the password, not video. NVR login remains unverified. |
-| Wrong credentials | Actual FFmpeg authentication handshakes stopped after exactly three rejected attempts and remained paused; unit tests verified explicit reconnect resumes attempts. |
-| Kiosk controls | Qt tests verified frameless/always-on-top flags, hidden panel/cursor, F5 reconnect, Esc/ordinary close blocked, wrong PIN rejected, correct PIN exits, and attempt throttling. Physical Windows shortcuts/display still need verification. |
-| Lifecycle and sleep guard | Real application no-signal startup/exit and worker cleanup passed offscreen. Windows API call/restore contract tested with a mock; actual Windows power behavior unverified. |
-| Configuration/security | Missing/malformed sections, wrong types, bounds, Unicode roundtrip, password/token rejection, salted PIN verification and credential-backend failure tests passed. Windows vault tested with mocks, not a real vault. |
-| Log privacy | Tests verified URL and registered-password redaction, including exception text; rotating-file limits checked. Native FFmpeg logging disabled. No production frame/audio persistence or telemetry is implemented. |
-| Signal-loss motion | Qt image check verified `reduce_motion=true` freezes static. No CRT flashes or scare effects exist in Phase A. |
+| Fresh Windows install and first launch | **Requires target hardware.** Confirm form opens without auto-connect. |
+| Known-good camera TCP | **Requires target hardware.** Existing player success is source evidence only. |
+| Credentialed URL import and special-character camera password | **Requires target hardware.** Confirm live login and password-free TOML/logs. |
+| Wrong password/channel/IP | **Requires target hardware.** Error stays readable/editable and app stays closeable. |
+| Corrected credentials and repeat Connect/Disconnect | **Requires target hardware.** Confirm clean switching and responsive controls. |
+| Full screen, F11 and Esc | **Requires target hardware.** Esc must return to connection fields. |
+| Alt+Tab, Close, Alt+F4 and Ctrl+Alt+Q | **Requires target hardware.** No PIN, forced focus or PC shutdown required. |
+| Optional Credential Manager remember | **Requires target hardware.** Session password must work if remembering fails. |
+| 60-second cable loss and recovery | **Requires target hardware.** Publisher-stop tests do not replace it. |
+| Monitor selection and display sleep restoration | **Requires target hardware.** Mocked Windows API checks are insufficient. |
+| Target filesystem/network privacy audit | **Not executed.** Production video is designed to stay in memory. |
+| 24-hour soak and memory/CPU/FPS targets | **Not executed; requires target hardware**, with hardening in Phase F. |
+| TV presets, CRT/parity and resolution scaling | **Not implemented; Phase B.** |
+| Face accuracy, tracking, low-light/IR and photo/poster behavior | **Not implemented; Phase C; requires target hardware.** |
+| Moving/tilted faces, effects and rotation | **Not implemented; Phases C/D; requires target hardware.** |
 
-The MediaMTX release archive was verified against its official SHA-256 file:
-`450d1172bf6708cbd630eada115ccfc33453227e16750369113d1dfe34f876d8`
-(`mediamtx_v1.12.3_linux_amd64.tar.gz`). No MediaMTX executable is included in the
-downloadable application source. Its Basic-auth parser rejects a colon within
-the decoded password, so the separate protocol receiver checks that case without
-misrepresenting MediaMTX as a compatible camera.
-
-Integration-test development found a source-readiness race and a Qt test-wait
-that could starve the capture thread. The fixture now waits for actual SDP, and
-the test wait yields to Python threads. Both affected integration checks passed
-after those corrections. Review also caught URL-status misclassification and
-non-BMP TOML serialization; both were corrected and regression-tested.
-
-## Executed on target hardware
-
-**None by this implementation.** Windows 11, a physical monitor and the user's
-actual camera/NVR are not available in this cloud instance.
-
-## Mandatory master-specification cases
-
-| Case | Status |
-|---|---|
-| Known-good RTSP camera TCP, fullscreen | **Requires target hardware.** Local generated RTSP and offscreen rendering passed. |
-| Real camera password containing `@ # % :` | **Requires target hardware.** Exact on-wire password bytes verified locally; no successful colon-password NVR/video login claimed. |
-| Wrong password/channel/IP | Fixed classifications and auth limit tested; wrong real camera/password/path/IP **requires target hardware**. |
-| 60-second cable unplug and automatic return | **Requires target hardware.** Local publisher-stop/recovery passed. |
-| TV presets at 1366×768 / 1080p / 1440p | **Not implemented; Phase B**, then requires physical display checks. |
-| CRT effects/reduce-motion safety | Static freeze passed; CRT effects **not implemented; Phase B**. |
-| 1/2/4 moving faces at 1–3 m and ±30° | **Not implemented; Phases C/D; requires target hardware**. |
-| Low light / IR | **Not executed; requires target hardware**, relevant to later detector phases. |
-| Poster/photo detection behavior | **Not implemented; Phase C**. |
-| Filter rotation modes | **Not implemented; Phase D**. |
-| Hotkeys/PIN | Phase A subset tested offscreen; Windows confirmation required. Full table/admin console **Phase E**. |
-| 24-hour soak / memory / CPU / FPS | **Not executed; requires target hardware**, with hardening in Phase F. |
-| Privacy | Architecture and redaction tested; full target-machine filesystem/network audit **not executed**. |
-
-No camera-to-screen latency, Windows install success, 25 FPS at 1080p,
-face accuracy, CPU usage target, GLSL/CPU parity or 24-hour stability is claimed.
-There are no YuNet models, fonts, bezels or masks bundled yet.
+No camera-to-screen latency, successful Windows install, 25 FPS at 1080p,
+face accuracy, CPU target, shader/CPU parity or 24-hour stability is claimed.
+No YuNet model, font, bezel or mask assets are bundled yet.
 
 ## Next required action
 
-On the Windows target, install/configure this release and run the acceptance
-checklist in [README.md](../README.md#acceptance-on-your-windows-pc--required-before-phase-b).
-Report actual fullscreen, hotkey, power and 60-second cable-loss/recovery outcomes.
-Continue to Phase B only after Phase A passes there.
+On the Windows target, run the updated
+[Windows acceptance checklist](../README.md#windows-acceptance--required-before-phase-b).
+Report actual connection, error editing, easy exit, fullscreen return and
+60-second cable-loss outcomes. Phase B remains gated on successful Phase A
+acceptance using this revised workflow.

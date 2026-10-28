@@ -128,3 +128,58 @@ def test_real_rtsp_reaches_qt_widget():
             worker.stop()
             worker.join(8)
             assert not worker.is_alive()
+
+
+@pytest.mark.skipif(
+    not os.environ.get("HAUNTED_TV_MEDIAMTX") or not shutil.which("ffmpeg"),
+    reason="Set HAUNTED_TV_MEDIAMTX to MediaMTX; FFmpeg with libx264 is required",
+)
+def test_connection_form_live_fullscreen_error_recovery_and_close(tmp_path):
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QApplication
+    from haunted_tv.config import AppConfig
+    from haunted_tv.core.session import CaptureSession
+    from haunted_tv.ui.main_window import MainWindow
+
+    app = QApplication.instance() or QApplication([])
+    def poll(predicate, timeout=15):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            QTest.qWait(20)
+            time.sleep(.005)
+            if predicate():
+                return
+        pytest.fail("The live viewer did not reach the expected state")
+
+    with LocalRTSPSource(os.environ["HAUNTED_TV_MEDIAMTX"]) as source:
+        config = AppConfig()
+        config.stream.connect_timeout_s = 2
+        config.stream.read_timeout_s = 2
+        config.stream.reconnect_max_backoff_s = 2
+        session = CaptureSession()
+        window = MainWindow(session, config, tmp_path / "viewer.toml")
+        window.show()
+        try:
+            assert session.latest_frame() is None
+            assert session.status().state.value == "disconnected"
+            window.url_edit.setText(source.url)
+            window.connect_button.click()
+            poll(lambda: session.status().state.value == "live" and window.video._image is not None)
+            assert not window.isFullScreen()
+            window.fullscreen_button.click()
+            assert window.isFullScreen()
+            source.stop_publisher()
+            poll(lambda: not window.isFullScreen())
+            assert window.url_edit.isVisible() and window.connect_button.isEnabled()
+            assert window.status_label.text()
+            source.start_publisher()
+            poll(lambda: session.status().state.value == "live" and window.video._image is not None)
+            window.disconnect_button.click()
+            assert session.latest_frame() is None
+            window.close()
+            assert not window.isVisible()
+        finally:
+            window.close()
+            session.join(8)
+            assert not session.is_alive()
